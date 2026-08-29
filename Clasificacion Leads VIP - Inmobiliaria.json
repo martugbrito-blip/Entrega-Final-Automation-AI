@@ -1,0 +1,2045 @@
+{
+  "name": "Clasificacion Leads VIP - Inmobiliaria",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyHour"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {},
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmailTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "id": "064531ac-0bc2-4067-a868-14b2316d93d2",
+      "name": "Gmail Trigger",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Xw1BdqzxQ3W33L4x",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "= {{ $json.text }}\n{{ $json.subject }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "Actúa como un sistema de triaje de leads para una inmobiliaria. Tu tarea \nes analizar el mensaje de un cliente potencial y clasificarlo.\n\nPensá paso a paso antes de responder: \n1) identificá si menciona alquiler o compra, \n2) buscá si menciona un presupuesto o rango de precio, \n3) evaluá el nivel de urgencia según palabras clave (ej: \"ya\", \"urgente\", \n\"esta semana\", \"cuanto antes\"), \n4) decidí si es un lead VIP o Estándar.\n\nUn lead es VIP si cumple AL MENOS UNA de estas condiciones:\n- Menciona un presupuesto igual o mayor a 150000 (USD).\n- Es una consulta de Compra (no alquiler) con urgencia Alta o Media o Baja.\n- El mensaje expresa intención de decisión inmediata (ej: \"quiero verlo hoy\", \"tengo el dinero listo\").\n\nRespondé ÚNICAMENTE en formato JSON válido, sin explicaciones adicionales, \ncon esta estructura exacta:\n{\n  \"tipo_operacion\": \"Alquiler\" o \"Compra\",\n  \"presupuesto_estimado\": número (0 si no se menciona),\n  \"nivel_urgencia\": \"Alta\", \"Media\" o \"Baja\",\n  \"clasificacion\": \"VIP\" o \"Estándar\",\n  \"resumen\": \"resumen de máximo 15 palabras\"\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        224,
+        0
+      ],
+      "id": "0b44378e-d896-42d1-8c0f-42785feb37c5",
+      "name": "AI Agent",
+      "retryOnFail": true,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.to.value[0].address }}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.4,
+      "position": [
+        288,
+        192
+      ],
+      "id": "9a1edd41-9e5a-4105-9981-11fb087f7d86",
+      "name": "Simple Memory"
+    },
+    {
+      "parameters": {
+        "model": "nvidia/nemotron-3-super-120b-a12b:free",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        192,
+        192
+      ],
+      "id": "538c27a5-1a61-45e0-bdd2-fb12ca75082a",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "Y5woTHt4tK1h9Fue",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsonSchemaExample": "{\n  \"tipo_operacion\": \"Compra\",\n  \"presupuesto_estimado\": 180000,\n  \"nivel_urgencia\": \"Alta\",\n  \"clasificacion\": \"VIP\",\n  \"resumen\": \"Cliente busca depto 2 ambientes zona norte, presupuesto alto, urgente\"\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.3,
+      "position": [
+        384,
+        192
+      ],
+      "id": "b2d2d145-54b7-462d-828e-9daadf94e5ef",
+      "name": "Structured Output Parser"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.output.clasificacion }}",
+                    "rightValue": "VIP",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "e6a6f0b8-80a3-4d4e-b450-ad460d069a99"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "VIP"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "45113d52-55a2-4d61-b357-c465b9bcfc44",
+                    "leftValue": "={{ $json.output.clasificacion }}",
+                    "rightValue": "Estándar",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Estándar"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        592,
+        0
+      ],
+      "id": "6eeaabd5-e50b-48bb-8b64-fa48ee0aa960",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1qD74e1VlUqcFeQALn7Yg8tORjWfPCgTtm4X6TpJMCAA",
+          "mode": "list",
+          "cachedResultName": "Registro de errores n8n",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1qD74e1VlUqcFeQALn7Yg8tORjWfPCgTtm4X6TpJMCAA/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Hoja 1",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1qD74e1VlUqcFeQALn7Yg8tORjWfPCgTtm4X6TpJMCAA/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Error ": "Error en nodo de agente con OpenRouter",
+            "Date": "={{ $now }}",
+            "Workflow": "={{ $workflow.id }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Error ",
+              "displayName": "Error ",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Workflow",
+              "displayName": "Workflow",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Date",
+              "displayName": "Date",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        592,
+        176
+      ],
+      "id": "04894339-4c87-49e0-8e07-bf5f971a6496",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "IoFnF21yANbQx7OT",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "select": "user",
+        "user": {
+          "__rl": true,
+          "value": "U0BP9AA1S1K",
+          "mode": "list",
+          "cachedResultName": "martugbrito (@martugbrito)"
+        },
+        "text": "Error en workflow",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        752,
+        176
+      ],
+      "id": "ed05ba30-b6b4-431e-8b85-7d339e49b17b",
+      "name": "Send a message",
+      "webhookId": "a0d02217-037f-4fb9-bcff-8ff809503728",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "dIY4ldN271bBp4Ue",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "airtableOAuth2Api",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "app2MkiczIWzNfx0h",
+          "mode": "list",
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://airtable.com/app2MkiczIWzNfx0h"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbllElR3FmfF5rtZh",
+          "mode": "list",
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://airtable.com/app2MkiczIWzNfx0h/tbllElR3FmfF5rtZh"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Nombre": "={{ $('Gmail Trigger').item.json.from.value[0].name }}",
+            "Email": "={{ $('Gmail Trigger').item.json.from.value[0].address }}",
+            "Mensaje Original": "={{ $('Gmail Trigger').item.json.text }}",
+            "Tipo de Operación": "={{ $('AI Agent').item.json.output.tipo_operacion }}",
+            "Presupuesto Estimado": "={{ $('AI Agent').item.json.output.presupuesto_estimado }}",
+            "Nivel de Urgencia": "={{ $('AI Agent').item.json.output.nivel_urgencia }}",
+            "Clasificación IA": "={{ $('AI Agent').item.json.output.clasificacion }}",
+            "Resumen IA": "={{ $('AI Agent').item.json.output.resumen }}",
+            "Estado": "Pendiente Aprobación"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Nombre",
+              "displayName": "Nombre",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Mensaje Original",
+              "displayName": "Mensaje Original",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Tipo de Operación",
+              "displayName": "Tipo de Operación",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Alquiler",
+                  "value": "Alquiler"
+                },
+                {
+                  "name": "Compra",
+                  "value": "Compra"
+                },
+                {
+                  "name": "Venta",
+                  "value": "Venta"
+                },
+                {
+                  "name": "Renta",
+                  "value": "Renta"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Presupuesto Estimado",
+              "displayName": "Presupuesto Estimado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Nivel de Urgencia",
+              "displayName": "Nivel de Urgencia",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Alta",
+                  "value": "Alta"
+                },
+                {
+                  "name": "Media",
+                  "value": "Media"
+                },
+                {
+                  "name": "Baja",
+                  "value": "Baja"
+                },
+                {
+                  "name": "Urgente",
+                  "value": "Urgente"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Clasificación IA",
+              "displayName": "Clasificación IA",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "VIP",
+                  "value": "VIP"
+                },
+                {
+                  "name": "Estándar",
+                  "value": "Estándar"
+                },
+                {
+                  "name": "Calificado",
+                  "value": "Calificado"
+                },
+                {
+                  "name": "Prioritario",
+                  "value": "Prioritario"
+                },
+                {
+                  "name": "Potencial",
+                  "value": "Potencial"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Resumen IA",
+              "displayName": "Resumen IA",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Estado",
+              "displayName": "Estado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Nuevo",
+                  "value": "Nuevo"
+                },
+                {
+                  "name": "Procesado por IA",
+                  "value": "Procesado por IA"
+                },
+                {
+                  "name": "Pendiente Aprobación",
+                  "value": "Pendiente Aprobación"
+                },
+                {
+                  "name": "Aprobado por Humano",
+                  "value": "Aprobado por Humano"
+                },
+                {
+                  "name": "Rechazado",
+                  "value": "Rechazado"
+                },
+                {
+                  "name": "Contactado",
+                  "value": "Contactado"
+                },
+                {
+                  "name": "Error de Procesamiento",
+                  "value": "Error de Procesamiento"
+                },
+                {
+                  "name": "En Proceso",
+                  "value": "En Proceso"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Aprobado",
+              "displayName": "Aprobado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Fecha de Ingreso",
+              "displayName": "Fecha de Ingreso",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Última Modificación",
+              "displayName": "Última Modificación",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Asesor Asignado",
+              "displayName": "Asesor Asignado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Comentarios de Asesor",
+              "displayName": "Comentarios de Asesor",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Fuente del Lead",
+              "displayName": "Fuente del Lead",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Web",
+                  "value": "Web"
+                },
+                {
+                  "name": "Email",
+                  "value": "Email"
+                },
+                {
+                  "name": "Teléfono",
+                  "value": "Teléfono"
+                },
+                {
+                  "name": "Otro",
+                  "value": "Otro"
+                },
+                {
+                  "name": "Facebook Ads",
+                  "value": "Facebook Ads"
+                },
+                {
+                  "name": "Sitio Web",
+                  "value": "Sitio Web"
+                },
+                {
+                  "name": "Instagram",
+                  "value": "Instagram"
+                },
+                {
+                  "name": "Recomendación",
+                  "value": "Recomendación"
+                },
+                {
+                  "name": "LinkedIn",
+                  "value": "LinkedIn"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Archivos Adjuntos",
+              "displayName": "Archivos Adjuntos",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        768,
+        -144
+      ],
+      "id": "af4e1bf0-8224-430c-b48b-7787ad83d2d6",
+      "name": "Create a record",
+      "credentials": {
+        "airtableOAuth2Api": {
+          "id": "X9KVahyudjVFipjn",
+          "name": "Airtable account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "operation": "sendAndWait",
+        "user": {
+          "__rl": true,
+          "value": "U0BP9AA1S1K",
+          "mode": "list",
+          "cachedResultName": "martugbrito (@martugbrito)"
+        },
+        "message": "=🌟 Nuevo lead VIP: {{ $('AI Agent').item.json.output.resumen }}\nPresupuesto: {{ $('AI Agent').item.json.output.presupuesto_estimado }}\n¿Aprobás contactar a este cliente con prioridad?",
+        "approvalOptions": {
+          "values": {
+            "approvalType": "double"
+          }
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.7,
+      "position": [
+        960,
+        -144
+      ],
+      "id": "f281fbb0-391d-490f-b180-a8f0b86c0369",
+      "name": "Send message and wait for response",
+      "webhookId": "67d790b8-0304-49c6-9cb6-84eea9006eb3",
+      "credentials": {
+        "slackOAuth2Api": {
+          "id": "dIY4ldN271bBp4Ue",
+          "name": "Slack account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "c5a9fc23-71ff-4204-94c2-d9ff36522330",
+              "leftValue": "={{ $json.data.approved }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1152,
+        -144
+      ],
+      "id": "dc35126b-402d-41d4-b9b7-8172e84126a7",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "authentication": "airtableOAuth2Api",
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "app2MkiczIWzNfx0h",
+          "mode": "list",
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://airtable.com/app2MkiczIWzNfx0h"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbllElR3FmfF5rtZh",
+          "mode": "list",
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://airtable.com/app2MkiczIWzNfx0h/tbllElR3FmfF5rtZh"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Aprobado": false,
+            "Estado": "Aprobado por Humano",
+            "Presupuesto Estimado": 0,
+            "id": "={{ $('Create a record').item.json.id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Nombre",
+              "displayName": "Nombre",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Mensaje Original",
+              "displayName": "Mensaje Original",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Tipo de Operación",
+              "displayName": "Tipo de Operación",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Alquiler",
+                  "value": "Alquiler"
+                },
+                {
+                  "name": "Compra",
+                  "value": "Compra"
+                },
+                {
+                  "name": "Venta",
+                  "value": "Venta"
+                },
+                {
+                  "name": "Renta",
+                  "value": "Renta"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Presupuesto Estimado",
+              "displayName": "Presupuesto Estimado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Nivel de Urgencia",
+              "displayName": "Nivel de Urgencia",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Alta",
+                  "value": "Alta"
+                },
+                {
+                  "name": "Media",
+                  "value": "Media"
+                },
+                {
+                  "name": "Baja",
+                  "value": "Baja"
+                },
+                {
+                  "name": "Urgente",
+                  "value": "Urgente"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Clasificación IA",
+              "displayName": "Clasificación IA",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "VIP",
+                  "value": "VIP"
+                },
+                {
+                  "name": "Estándar",
+                  "value": "Estándar"
+                },
+                {
+                  "name": "Calificado",
+                  "value": "Calificado"
+                },
+                {
+                  "name": "Prioritario",
+                  "value": "Prioritario"
+                },
+                {
+                  "name": "Potencial",
+                  "value": "Potencial"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Resumen IA",
+              "displayName": "Resumen IA",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Estado",
+              "displayName": "Estado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Nuevo",
+                  "value": "Nuevo"
+                },
+                {
+                  "name": "Procesado por IA",
+                  "value": "Procesado por IA"
+                },
+                {
+                  "name": "Pendiente Aprobación",
+                  "value": "Pendiente Aprobación"
+                },
+                {
+                  "name": "Aprobado por Humano",
+                  "value": "Aprobado por Humano"
+                },
+                {
+                  "name": "Rechazado",
+                  "value": "Rechazado"
+                },
+                {
+                  "name": "Contactado",
+                  "value": "Contactado"
+                },
+                {
+                  "name": "Error de Procesamiento",
+                  "value": "Error de Procesamiento"
+                },
+                {
+                  "name": "En Proceso",
+                  "value": "En Proceso"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Aprobado",
+              "displayName": "Aprobado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Fecha de Ingreso",
+              "displayName": "Fecha de Ingreso",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Última Modificación",
+              "displayName": "Última Modificación",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Asesor Asignado",
+              "displayName": "Asesor Asignado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Comentarios de Asesor",
+              "displayName": "Comentarios de Asesor",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Fuente del Lead",
+              "displayName": "Fuente del Lead",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Web",
+                  "value": "Web"
+                },
+                {
+                  "name": "Email",
+                  "value": "Email"
+                },
+                {
+                  "name": "Teléfono",
+                  "value": "Teléfono"
+                },
+                {
+                  "name": "Otro",
+                  "value": "Otro"
+                },
+                {
+                  "name": "Facebook Ads",
+                  "value": "Facebook Ads"
+                },
+                {
+                  "name": "Sitio Web",
+                  "value": "Sitio Web"
+                },
+                {
+                  "name": "Instagram",
+                  "value": "Instagram"
+                },
+                {
+                  "name": "Recomendación",
+                  "value": "Recomendación"
+                },
+                {
+                  "name": "LinkedIn",
+                  "value": "LinkedIn"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Archivos Adjuntos",
+              "displayName": "Archivos Adjuntos",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        -240
+      ],
+      "id": "754dbaa3-a861-4506-91b0-79d965850945",
+      "name": "Update record",
+      "credentials": {
+        "airtableOAuth2Api": {
+          "id": "X9KVahyudjVFipjn",
+          "name": "Airtable account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "airtableOAuth2Api",
+        "operation": "update",
+        "base": {
+          "__rl": true,
+          "value": "app2MkiczIWzNfx0h",
+          "mode": "list",
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://airtable.com/app2MkiczIWzNfx0h"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbllElR3FmfF5rtZh",
+          "mode": "list",
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://airtable.com/app2MkiczIWzNfx0h/tbllElR3FmfF5rtZh"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Aprobado": false,
+            "Estado": "En Proceso",
+            "Presupuesto Estimado": 0,
+            "id": "={{ $('Create a record').item.json.id }}"
+          },
+          "matchingColumns": [
+            "id"
+          ],
+          "schema": [
+            {
+              "id": "id",
+              "displayName": "id",
+              "required": false,
+              "defaultMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": false
+            },
+            {
+              "id": "Nombre",
+              "displayName": "Nombre",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Mensaje Original",
+              "displayName": "Mensaje Original",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Tipo de Operación",
+              "displayName": "Tipo de Operación",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Alquiler",
+                  "value": "Alquiler"
+                },
+                {
+                  "name": "Compra",
+                  "value": "Compra"
+                },
+                {
+                  "name": "Venta",
+                  "value": "Venta"
+                },
+                {
+                  "name": "Renta",
+                  "value": "Renta"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Presupuesto Estimado",
+              "displayName": "Presupuesto Estimado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Nivel de Urgencia",
+              "displayName": "Nivel de Urgencia",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Alta",
+                  "value": "Alta"
+                },
+                {
+                  "name": "Media",
+                  "value": "Media"
+                },
+                {
+                  "name": "Baja",
+                  "value": "Baja"
+                },
+                {
+                  "name": "Urgente",
+                  "value": "Urgente"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Clasificación IA",
+              "displayName": "Clasificación IA",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "VIP",
+                  "value": "VIP"
+                },
+                {
+                  "name": "Estándar",
+                  "value": "Estándar"
+                },
+                {
+                  "name": "Calificado",
+                  "value": "Calificado"
+                },
+                {
+                  "name": "Prioritario",
+                  "value": "Prioritario"
+                },
+                {
+                  "name": "Potencial",
+                  "value": "Potencial"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Resumen IA",
+              "displayName": "Resumen IA",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Estado",
+              "displayName": "Estado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Nuevo",
+                  "value": "Nuevo"
+                },
+                {
+                  "name": "Procesado por IA",
+                  "value": "Procesado por IA"
+                },
+                {
+                  "name": "Pendiente Aprobación",
+                  "value": "Pendiente Aprobación"
+                },
+                {
+                  "name": "Aprobado por Humano",
+                  "value": "Aprobado por Humano"
+                },
+                {
+                  "name": "Rechazado",
+                  "value": "Rechazado"
+                },
+                {
+                  "name": "Contactado",
+                  "value": "Contactado"
+                },
+                {
+                  "name": "Error de Procesamiento",
+                  "value": "Error de Procesamiento"
+                },
+                {
+                  "name": "En Proceso",
+                  "value": "En Proceso"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Aprobado",
+              "displayName": "Aprobado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Fecha de Ingreso",
+              "displayName": "Fecha de Ingreso",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Última Modificación",
+              "displayName": "Última Modificación",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Asesor Asignado",
+              "displayName": "Asesor Asignado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Comentarios de Asesor",
+              "displayName": "Comentarios de Asesor",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Fuente del Lead",
+              "displayName": "Fuente del Lead",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Web",
+                  "value": "Web"
+                },
+                {
+                  "name": "Email",
+                  "value": "Email"
+                },
+                {
+                  "name": "Teléfono",
+                  "value": "Teléfono"
+                },
+                {
+                  "name": "Otro",
+                  "value": "Otro"
+                },
+                {
+                  "name": "Facebook Ads",
+                  "value": "Facebook Ads"
+                },
+                {
+                  "name": "Sitio Web",
+                  "value": "Sitio Web"
+                },
+                {
+                  "name": "Instagram",
+                  "value": "Instagram"
+                },
+                {
+                  "name": "Recomendación",
+                  "value": "Recomendación"
+                },
+                {
+                  "name": "LinkedIn",
+                  "value": "LinkedIn"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Archivos Adjuntos",
+              "displayName": "Archivos Adjuntos",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        1344,
+        -64
+      ],
+      "id": "4fbc8f06-94c2-4748-b42c-0f81ace65de5",
+      "name": "Update record1",
+      "credentials": {
+        "airtableOAuth2Api": {
+          "id": "X9KVahyudjVFipjn",
+          "name": "Airtable account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $('Gmail Trigger').item.json.id }}",
+        "message": "Hola, gracias por tu consulta. En las próximas horas uno de nuestros asesores se va a contactar con vos.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1568,
+        -240
+      ],
+      "id": "4d3336a4-1e91-4e23-9cc6-6b007e647ce8",
+      "name": "Reply to a message",
+      "webhookId": "56b85550-7654-4507-ba52-d6fd3db9be32",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Xw1BdqzxQ3W33L4x",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $('Gmail Trigger').item.json.id }}",
+        "message": "Hola, gracias por tu consulta. En las próximas 48 horas uno de nuestros asesores se va a contactar con vos.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1568,
+        -64
+      ],
+      "id": "cfcc282e-7512-47f2-a545-09e281234771",
+      "name": "Reply to a message1",
+      "webhookId": "79b5e2aa-8477-483e-a9a5-e68508e9d31f",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Xw1BdqzxQ3W33L4x",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "airtableOAuth2Api",
+        "operation": "create",
+        "base": {
+          "__rl": true,
+          "value": "app2MkiczIWzNfx0h",
+          "mode": "list",
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://airtable.com/app2MkiczIWzNfx0h"
+        },
+        "table": {
+          "__rl": true,
+          "value": "tbllElR3FmfF5rtZh",
+          "mode": "list",
+          "cachedResultName": "Leads",
+          "cachedResultUrl": "https://airtable.com/app2MkiczIWzNfx0h/tbllElR3FmfF5rtZh"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Aprobado": false,
+            "Nombre": "={{ $('Gmail Trigger').item.json.from.value[0].name }}",
+            "Email": "={{ $('Gmail Trigger').item.json.from.value[0].address }}",
+            "Mensaje Original": "={{ $('Gmail Trigger').item.json.text }}",
+            "Presupuesto Estimado": "={{ $('AI Agent').item.json.output.presupuesto_estimado }}",
+            "Tipo de Operación": "={{ $('AI Agent').item.json.output.tipo_operacion }}",
+            "Clasificación IA": "={{ $('AI Agent').item.json.output.clasificacion }}",
+            "Resumen IA": "={{ $('AI Agent').item.json.output.resumen }}",
+            "Estado": "En Proceso"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Nombre",
+              "displayName": "Nombre",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Email",
+              "displayName": "Email",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Mensaje Original",
+              "displayName": "Mensaje Original",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Tipo de Operación",
+              "displayName": "Tipo de Operación",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Alquiler",
+                  "value": "Alquiler"
+                },
+                {
+                  "name": "Compra",
+                  "value": "Compra"
+                },
+                {
+                  "name": "Venta",
+                  "value": "Venta"
+                },
+                {
+                  "name": "Renta",
+                  "value": "Renta"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Presupuesto Estimado",
+              "displayName": "Presupuesto Estimado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "number",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Nivel de Urgencia",
+              "displayName": "Nivel de Urgencia",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Alta",
+                  "value": "Alta"
+                },
+                {
+                  "name": "Media",
+                  "value": "Media"
+                },
+                {
+                  "name": "Baja",
+                  "value": "Baja"
+                },
+                {
+                  "name": "Urgente",
+                  "value": "Urgente"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Clasificación IA",
+              "displayName": "Clasificación IA",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "VIP",
+                  "value": "VIP"
+                },
+                {
+                  "name": "Estándar",
+                  "value": "Estándar"
+                },
+                {
+                  "name": "Calificado",
+                  "value": "Calificado"
+                },
+                {
+                  "name": "Prioritario",
+                  "value": "Prioritario"
+                },
+                {
+                  "name": "Potencial",
+                  "value": "Potencial"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Resumen IA",
+              "displayName": "Resumen IA",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Estado",
+              "displayName": "Estado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Nuevo",
+                  "value": "Nuevo"
+                },
+                {
+                  "name": "Procesado por IA",
+                  "value": "Procesado por IA"
+                },
+                {
+                  "name": "Pendiente Aprobación",
+                  "value": "Pendiente Aprobación"
+                },
+                {
+                  "name": "Aprobado por Humano",
+                  "value": "Aprobado por Humano"
+                },
+                {
+                  "name": "Rechazado",
+                  "value": "Rechazado"
+                },
+                {
+                  "name": "Contactado",
+                  "value": "Contactado"
+                },
+                {
+                  "name": "Error de Procesamiento",
+                  "value": "Error de Procesamiento"
+                },
+                {
+                  "name": "En Proceso",
+                  "value": "En Proceso"
+                }
+              ],
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Aprobado",
+              "displayName": "Aprobado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "boolean",
+              "readOnly": false,
+              "removed": false
+            },
+            {
+              "id": "Fecha de Ingreso",
+              "displayName": "Fecha de Ingreso",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "dateTime",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Última Modificación",
+              "displayName": "Última Modificación",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": true,
+              "removed": true
+            },
+            {
+              "id": "Asesor Asignado",
+              "displayName": "Asesor Asignado",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Comentarios de Asesor",
+              "displayName": "Comentarios de Asesor",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "string",
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Fuente del Lead",
+              "displayName": "Fuente del Lead",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "options",
+              "options": [
+                {
+                  "name": "Web",
+                  "value": "Web"
+                },
+                {
+                  "name": "Email",
+                  "value": "Email"
+                },
+                {
+                  "name": "Teléfono",
+                  "value": "Teléfono"
+                },
+                {
+                  "name": "Otro",
+                  "value": "Otro"
+                },
+                {
+                  "name": "Facebook Ads",
+                  "value": "Facebook Ads"
+                },
+                {
+                  "name": "Sitio Web",
+                  "value": "Sitio Web"
+                },
+                {
+                  "name": "Instagram",
+                  "value": "Instagram"
+                },
+                {
+                  "name": "Recomendación",
+                  "value": "Recomendación"
+                },
+                {
+                  "name": "LinkedIn",
+                  "value": "LinkedIn"
+                }
+              ],
+              "readOnly": false,
+              "removed": true
+            },
+            {
+              "id": "Archivos Adjuntos",
+              "displayName": "Archivos Adjuntos",
+              "required": false,
+              "defaultMatch": false,
+              "canBeUsedToMatch": true,
+              "display": true,
+              "type": "array",
+              "readOnly": false,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "typecast": true
+        }
+      },
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 2.2,
+      "position": [
+        768,
+        16
+      ],
+      "id": "521825ef-ad0e-4f19-82bb-a3080c88a674",
+      "name": "Create a record1",
+      "credentials": {
+        "airtableOAuth2Api": {
+          "id": "X9KVahyudjVFipjn",
+          "name": "Airtable account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "reply",
+        "messageId": "={{ $('Gmail Trigger').item.json.id }}",
+        "message": "Hola, gracias por tu consulta. En las próximas 48 horas uno de nuestros asesores se va a contactar con vos.",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        960,
+        32
+      ],
+      "id": "cb6e8e83-db58-4fe7-984d-09a6acd3441c",
+      "name": "Reply to a message2",
+      "webhookId": "79b5e2aa-8477-483e-a9a5-e68508e9d31f",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "Xw1BdqzxQ3W33L4x",
+          "name": "Gmail account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Create a record",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Create a record1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a record": {
+      "main": [
+        [
+          {
+            "node": "Send message and wait for response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send message and wait for response": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Update record",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Update record1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update record": {
+      "main": [
+        [
+          {
+            "node": "Reply to a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update record1": {
+      "main": [
+        [
+          {
+            "node": "Reply to a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create a record1": {
+      "main": [
+        [
+          {
+            "node": "Reply to a message2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "2f3f431a-ee4c-4976-b06e-fa1253c349d4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "2472d640881278114dd25c3ae25bc99588e447baf2db9da03f9e025c1807e6df"
+  },
+  "nodeGroups": [],
+  "id": "fBjPP7B1Vbf2sDy8",
+  "tags": []
+}
